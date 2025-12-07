@@ -1,0 +1,35 @@
+services:
+  - type: web
+    name: promptpilot-backend
+    env: docker
+    region: frankfurt
+    plan: free
+    
+    # Build configuration
+    dockerfilePath: ./Dockerfile
+    
+    # Environment variables will be added in Render dashboard
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12
+      - key: LOG_LEVEL
+        value: INFO
+    
+    # Health check configuration
+    healthCheckPath: /health
+    healthCheckInterval: 30
+    
+    # Auto-deploy on push to master
+    autoDeploy: true
+    
+    # Scaling (free tier = single instance)
+    numInstances: 1
+    
+    # Port configuration
+    ports:
+      - number: 8000
+        protocol: HTTP
+    
+    # Timeout settings (in seconds)
+    startupTimeout: 300
+    requestTimeout: 300
