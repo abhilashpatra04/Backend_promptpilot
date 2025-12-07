@@ -28,25 +28,27 @@ Groq_MODELS = [
 
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-
-if not GEMINI_API_KEY or GEMINI_API_KEY == "YOUR_GEMINI_API_KEY":
-    raise ValueError("GEMINI_API_KEY environment variable is not set or is invalid. Please set it in your environment or .env file.")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
 # Initialize genai safely: some google.generativeai distributions expose a Client class,
 # others expose configure()/top-level functions. Support both where possible.
+# Gemini is optional - app can work with other providers (Groq, OpenRouter)
 client = None
-try:
-    if hasattr(genai, "Client"):
-        client = genai.Client(api_key=GEMINI_API_KEY)
-    elif hasattr(genai, "configure"):
-        # configure the module globally
-        genai.configure(api_key=GEMINI_API_KEY)
+if GEMINI_API_KEY and GEMINI_API_KEY != "YOUR_GEMINI_API_KEY":
+    try:
+        if hasattr(genai, "Client"):
+            client = genai.Client(api_key=GEMINI_API_KEY)
+        elif hasattr(genai, "configure"):
+            # configure the module globally
+            genai.configure(api_key=GEMINI_API_KEY)
+            client = None
+        else:
+            client = None
+    except Exception:
+        # best-effort: continue without throwing here; callers will handle missing features
         client = None
-    else:
-        client = None
-except Exception:
-    # best-effort: continue without throwing here; callers will handle missing features
+else:
+    # Gemini API key not configured; other providers (Groq, OpenRouter) can still be used
     client = None
 
 # Default free model for users without API keys
