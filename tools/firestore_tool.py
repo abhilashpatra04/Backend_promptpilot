@@ -1,5 +1,6 @@
 from google.cloud import firestore
 from datetime import datetime
+import os
 import mcp
 import cloudinary
 import cloudinary.uploader
@@ -43,10 +44,13 @@ async def get_files_for_conversation(conversation_id: str) -> list:
     except Exception as e:
         return []
 
+import os
+
+# Configure Cloudinary from environment variables
 cloudinary.config(
-  cloud_name = "dkkyiygll",
-  api_key = "713672969564931",
-  api_secret = "4A9T1zfrrI5rad0eidhr6DOTsTk"
+  cloud_name = os.getenv("CLOUDINARY_CLOUD_NAME"),
+  api_key = os.getenv("CLOUDINARY_API_KEY"),
+  api_secret = os.getenv("CLOUDINARY_API_SECRET")
 )
 
 @mcp.tool()

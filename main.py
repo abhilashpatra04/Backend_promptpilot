@@ -7,7 +7,8 @@ from chains.base_chat import router
 from dotenv import load_dotenv
 
 load_dotenv()
-print(os.getenv("OPENROUTER_API_KEY"))
+
+# API keys loaded from environment variables (DO NOT PRINT OR LOG)
 
 # ------------------ Main FastAPI App ------------------
 app = FastAPI(title="PromptPilot API", version="1.0.0")

@@ -1,10 +1,11 @@
 from charset_normalizer import detect
 import requests
+import os
 from bs4 import BeautifulSoup
 
 from config import OPENROUTER_API_KEY
 
-SERPAPI_KEY = "05d01ba12f2017637397d9519b0b8fbe01d22c752aaf185e1de65e4217d0f4af"
+SERPAPI_KEY = os.getenv("SERPAPI_KEY", "")
 
 def fetch_links_serpapi(query, count=3):
     try:
