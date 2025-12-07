@@ -11,8 +11,15 @@ from pydantic import BaseModel, Field
 import cloudinary
 import cloudinary.uploader
 from utils.model_loader import get_model_response, get_streaming_response, get_api_key_for_model
-from utils.firebase_utils import ChatResponse, ChatRequest, create_new_chat, get_chat_threads, store_message
-from utils.firebase_utils import get_chat_messages
+from utils.firebase_utils import (
+    ChatResponse,
+    ChatRequest,
+    create_new_chat,
+    get_chat_threads,
+    store_message,
+    get_chat_messages,
+    get_db,
+)
 from google.cloud import firestore
 from utils.context_utils import extract_text_from_pdf, extract_text_from_image
 from utils.pdf_vector_store import VECTOR_DIR, search_pdf_context, process_and_store_pdfs
@@ -382,7 +389,7 @@ async def handle_regular_chat(req: ChatRequest):
         # Build conversation history
         history = get_chat_messages(req.uid, req.chat_id) if req.chat_id else []
         messages = []
-        db = firestore.Client()
+        db = get_db()
         
         # Add agent system prompt if agent is selected
         if req.agent_type and req.agent_type in VIRTUAL_EXPERT_AGENTS:
@@ -419,6 +426,8 @@ async def handle_regular_chat(req: ChatRequest):
         pdf_context = ""
         if req.chat_id:
             try:
+                if db is None:
+                    raise Exception("Firestore not configured")
                 files_ref = db.collection("files").where("conversation_id", "==", req.chat_id)
                 files = [doc.to_dict() for doc in files_ref.stream()]
                 pdfs = [f for f in files if f.get("file_type") == "pdf"]
@@ -427,13 +436,15 @@ async def handle_regular_chat(req: ChatRequest):
                     if pdf_context.strip():
                         pdf_context = f"\n\n📄 **PDF CONTEXT**:\n{pdf_context[:1500]}\n"  # Limit context size
             except Exception as e:
-                logger.warning(f"PDF context extraction failed: {e}")
+                logger.warning(f"PDF context extraction failed (Firestore may be missing): {e}")
                 pdf_context = ""
         
         # Handle image context
         image_context = ""
         if not req.image_urls and req.chat_id:
             try:
+                if db is None:
+                    raise Exception("Firestore not configured")
                 files_ref = db.collection("files").where("conversation_id", "==", req.chat_id)
                 files = [doc.to_dict() for doc in files_ref.stream()]
                 images = [f for f in files if f.get("file_type") in ["jpg", "jpeg", "png", "image/jpeg", "image/png"]]
@@ -442,7 +453,7 @@ async def handle_regular_chat(req: ChatRequest):
                 if image_context.strip():
                     image_context = f"\n\n🖼️ **IMAGE CONTEXT**:\n{image_context[:1000]}\n"  # Limit context size
             except Exception as e:
-                logger.warning(f"Image context extraction failed: {e}")
+                logger.warning(f"Image context extraction failed (Firestore may be missing): {e}")
                 image_context = ""
         
         # Combine all context
@@ -465,13 +476,21 @@ async def handle_regular_chat(req: ChatRequest):
         # Get AI response with the appropriate API key
         reply = get_model_response(req.model, messages, image_urls=req.image_urls, api_key=api_key)
         
-        # Determine chat_id
+        # Determine chat_id (create in Firestore if available, otherwise fallback)
         chat_id = req.chat_id
         if not chat_id:
-            chat_id = create_new_chat(uid=req.uid, title=req.title)
-        
-        # Store user + AI message
-        store_message(uid=req.uid, chat_id=chat_id, user_msg=req.prompt, ai_msg=reply)
+            try:
+                chat_id = create_new_chat(uid=req.uid, title=req.title)
+            except HTTPException as he:
+                # Firestore not configured — fallback to a local timestamp ID so chat can continue
+                logger.warning(f"Could not create chat in Firestore: {he.detail}. Falling back to local chat_id.")
+                chat_id = str(int(datetime.utcnow().timestamp() * 1000))
+
+        # Store user + AI message if possible, otherwise continue
+        try:
+            store_message(uid=req.uid, chat_id=chat_id, user_msg=req.prompt, ai_msg=reply)
+        except HTTPException as he:
+            logger.warning(f"Could not store message in Firestore: {he.detail}. Continuing without persistence.")
         
         return ChatResponse(reply=reply, chat_id=chat_id)
         
@@ -487,7 +506,7 @@ async def stream_chat_response(req: ChatRequest):
         # Build conversation with agent system prompt
         history = get_chat_messages(req.uid, req.chat_id) if req.chat_id else []
         messages = []
-        db = firestore.Client()
+        db = get_db()
         
         # Add agent system prompt if agent is selected
         if req.agent_type and req.agent_type in VIRTUAL_EXPERT_AGENTS:
@@ -524,6 +543,8 @@ async def stream_chat_response(req: ChatRequest):
         
         if req.chat_id:
             try:
+                if db is None:
+                    raise Exception("Firestore not configured")
                 files_ref = db.collection("files").where("conversation_id", "==", req.chat_id)
                 files = [doc.to_dict() for doc in files_ref.stream()]
                 
@@ -543,7 +564,7 @@ async def stream_chat_response(req: ChatRequest):
                         image_context = f"\n\n🖼️ **IMAGE CONTEXT**:\n{image_context[:800]}\n"
                         
             except Exception as e:
-                logger.warning(f"Context extraction failed during streaming: {e}")
+                logger.warning(f"Context extraction failed during streaming (Firestore may be missing): {e}")
         
         # Combine all context
         full_context = web_context + pdf_context + image_context
@@ -618,7 +639,9 @@ def delete_files_for_conversation(conversation_id: str = Query(...)):
     try:
         logger.info(f"Deleting files for conversation: {conversation_id}")
         
-        db = firestore.Client()
+        db = get_db()
+        if db is None:
+            raise HTTPException(status_code=503, detail="Firestore is not configured. Set GOOGLE_APPLICATION_CREDENTIALS or FIREBASE_CREDENTIALS_JSON in environment.")
         files_ref = db.collection("files").where("conversation_id", "==", conversation_id)
         docs = list(files_ref.stream())
         
@@ -682,7 +705,9 @@ async def upload_pdf(
     files: List[UploadFile] = File(...)
 ):
     import datetime
-    db = firestore.Client()
+    db = get_db()
+    if db is None:
+        raise HTTPException(status_code=503, detail="Firestore is not configured. Set GOOGLE_APPLICATION_CREDENTIALS or FIREBASE_CREDENTIALS_JSON in environment.")
     tmp_paths = []
     file_names = []
     
