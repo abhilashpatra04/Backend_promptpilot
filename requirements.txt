@@ -21,6 +21,8 @@ lxml
 
 # Document processing
 PyPDF2
+pdfplumber
+pytesseract
 
 pillow
 
