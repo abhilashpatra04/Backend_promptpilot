@@ -366,19 +366,10 @@ class DeleteResponse(BaseModel):
 async def handle_chat(req: ChatRequest):
     try:
         logger.info(f"Chat request: uid={req.uid}, model={req.model}, stream={req.stream}, prompt_length={len(req.prompt)}")
-        
-        if req.stream:
-            return StreamingResponse(
-                stream_chat_response(req),
-                media_type="text/plain",
-                headers={
-                    "Cache-Control": "no-cache",
-                    "Connection": "keep-alive",
-                    "Content-Type": "text/plain; charset=utf-8"
-                }
-            )
-        else:
-            return await handle_regular_chat(req)
+        # Streaming is temporarily disabled. Always use the non-streaming
+        # handler to keep behavior stable while streaming is paused.
+        # If you want to re-enable streaming later, revert this block.
+        return await handle_regular_chat(req)
     except Exception as e:
         logger.error(f"Exception in /chat: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Chat error: {str(e)}")
