@@ -46,9 +46,13 @@ structlog
 
 # Security
 cryptography
-langchain
-langchain-community
-langchain-google-genai
-langchain-groq
-langchain-text-splitters
-  
+
+# LangChain packages with compatible versions
+# Using langchain-core 0.3.x which still has pydantic_v1 support
+langchain-core~=0.3.0
+langchain~=0.3.0
+langchain-community~=0.3.0
+langchain-google-genai~=2.0.0
+langchain-groq~=0.2.0
+langchain-text-splitters~=0.3.0
+langgraph
