@@ -386,8 +386,16 @@ async def handle_chat(req: ChatRequest):
 async def handle_regular_chat(req: ChatRequest):
     """Handle non-streaming chat requests with virtual expert agents"""
     try:
-        # Build conversation history
-        history = get_chat_messages(req.uid, req.chat_id) if req.chat_id else []
+        # Build conversation history (only query Firestore if configured)
+        db = get_db()
+        if req.chat_id and db:
+            try:
+                history = get_chat_messages(req.uid, req.chat_id)
+            except Exception as e:
+                logger.warning(f"Unable to load chat history: {e}")
+                history = []
+        else:
+            history = []
         messages = []
         db = get_db()
         
@@ -503,10 +511,17 @@ async def stream_chat_response(req: ChatRequest):
     try:
         logger.info(f"Starting streaming response for: {req.prompt[:50]}...")
         
-        # Build conversation with agent system prompt
-        history = get_chat_messages(req.uid, req.chat_id) if req.chat_id else []
-        messages = []
+        # Build conversation with agent system prompt (only query Firestore if configured)
         db = get_db()
+        if req.chat_id and db:
+            try:
+                history = get_chat_messages(req.uid, req.chat_id)
+            except Exception as e:
+                logger.warning(f"Unable to load chat history for streaming: {e}")
+                history = []
+        else:
+            history = []
+        messages = []
         
         # Add agent system prompt if agent is selected
         if req.agent_type and req.agent_type in VIRTUAL_EXPERT_AGENTS:
