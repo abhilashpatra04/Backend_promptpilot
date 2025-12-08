@@ -485,11 +485,13 @@ async def handle_regular_chat(req: ChatRequest):
                 logger.warning(f"Could not create chat in Firestore: {he.detail}. Falling back to local chat_id.")
                 chat_id = str(int(datetime.utcnow().timestamp() * 1000))
 
-        # Store user + AI message if possible, otherwise continue
-        try:
-            store_message(uid=req.uid, chat_id=chat_id, user_msg=req.prompt, ai_msg=reply)
-        except HTTPException as he:
-            logger.warning(f"Could not store message in Firestore: {he.detail}. Continuing without persistence.")
+        # NOTE: Message storage is handled by the Android frontend (MessageRepositoryImpl).
+        # The frontend saves messages to Firestore with the correct message ID.
+        # Do NOT store messages here as it creates duplicates with different IDs.
+        # try:
+        #     store_message(uid=req.uid, chat_id=chat_id, user_msg=req.prompt, ai_msg=reply)
+        # except HTTPException as he:
+        #     logger.warning(f"Could not store message in Firestore: {he.detail}. Continuing without persistence.")
         
         return ChatResponse(reply=reply, chat_id=chat_id)
         
@@ -608,11 +610,12 @@ async def stream_chat_response(req: ChatRequest):
             return
         
         # Store the complete message after streaming
-        if full_response.strip():
-            try:
-                store_message(uid=req.uid, chat_id=chat_id, user_msg=req.prompt, ai_msg=full_response)
-            except Exception as e:
-                logger.warning(f"Failed to store message: {e}")
+        # NOTE: Message storage is handled by the Android frontend. Do NOT store here.
+        # if full_response.strip():
+        #     try:
+        #         store_message(uid=req.uid, chat_id=chat_id, user_msg=req.prompt, ai_msg=full_response)
+        #     except Exception as e:
+        #         logger.warning(f"Failed to store message: {e}")
         
         yield f"data: {json.dumps({'done': True, 'chat_id': chat_id})}\n\n"
         logger.info(f"Streaming completed successfully. Response length: {len(full_response)}")
