@@ -29,7 +29,7 @@ app.include_router(router)
 # Add a root endpoint for health check
 @app.get("/")
 async def root():
-    return {"message": "PromptPilot API is running", "status": "healthy"}
+    return {"message": "PromptPilot API is running", "status": "healthy", "version": "1.0.0"}
 
 # Add health check endpoint
 @app.get("/health")

@@ -231,21 +231,10 @@ async def get_gemini_streaming_response(model: str, messages: list, image_urls=N
     """Get streaming response from Gemini with optional user API key"""
     try:
         key = api_key or GEMINI_API_KEY
-        # Prefer Client if available, otherwise configure module and attempt to use top-level functions
-        gemini_client = None
-        if hasattr(genai, 'Client'):
-            try:
-                gemini_client = genai.Client(api_key=key)
-            except Exception:
-                gemini_client = None
-        else:
-            # configure module for this key if supported
-            if hasattr(genai, 'configure'):
-                try:
-                    genai.configure(api_key=key)
-                except Exception:
-                    pass
-
+        
+        # Configure Gemini with the API key
+        genai.configure(api_key=key)
+        
         prompt = messages[-1]["content"]
         file_objs = []
         
@@ -259,26 +248,13 @@ async def get_gemini_streaming_response(model: str, messages: list, image_urls=N
         
         contents = file_objs + [prompt]
         
-        # Try older Client streaming first
-        if gemini_client is not None and hasattr(gemini_client, 'models') and hasattr(gemini_client.models, 'generate_content_stream'):
-            response = gemini_client.models.generate_content_stream(
-                model=model,
-                contents=contents
-            )
-            for chunk in response:
-                if hasattr(chunk, 'text') and chunk.text:
-                    yield chunk.text
-        else:
-            # Fall back to top-level generation function if available (non-streaming)
-            if hasattr(genai, 'create_tuned_model'):
-                # no streaming equivalent available in this SDK; call a non-streaming endpoint if possible
-                try:
-                    resp = genai.get_model(model) if hasattr(genai, 'get_model') else None
-                    yield 'Gemini streaming is not supported with the installed google.generativeai SDK.\n'
-                except Exception as e:
-                    yield f'Error calling Gemini fallback: {e}'
-            else:
-                yield 'Gemini API client not available in this environment.'
+        # Use the correct API: GenerativeModel with generate_content_stream
+        gemini_model = genai.GenerativeModel(model)
+        response = gemini_model.generate_content(contents, stream=True)
+        
+        for chunk in response:
+            if hasattr(chunk, 'text') and chunk.text:
+                yield chunk.text
                 
     except Exception as e:
         yield f"Error in Gemini streaming: {str(e)}"
@@ -286,22 +262,11 @@ async def get_gemini_streaming_response(model: str, messages: list, image_urls=N
 def get_model_response(model, messages, image_urls=None, api_key: str = None):
     """Get model response with optional user API key"""
     model_lower = model.lower()
-    if model_lower in ["gemini-2.5-pro", "gemini-2.5-flash"]:
+    if model_lower in ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]:
         key = api_key or GEMINI_API_KEY
-        # Prefer Client if available, otherwise configure module and attempt to use top-level functions
-        gemini_client = None
-        if hasattr(genai, 'Client'):
-            try:
-                gemini_client = genai.Client(api_key=key)
-            except Exception:
-                gemini_client = None
-        else:
-            # configure module for this key if supported
-            if hasattr(genai, 'configure'):
-                try:
-                    genai.configure(api_key=key)
-                except Exception:
-                    pass
+        
+        # Configure Gemini with the API key
+        genai.configure(api_key=key)
 
         prompt = messages[-1]["content"]
         file_objs = []
@@ -313,20 +278,11 @@ def get_model_response(model, messages, image_urls=None, api_key: str = None):
                     except Exception as e:
                         print(f"Error uploading file {url} to Gemini: {e}")
         contents = file_objs + [prompt]
-        # Try older Client generate first
-        if gemini_client is not None and hasattr(gemini_client, 'models') and hasattr(gemini_client.models, 'generate_content'):
-            response = gemini_client.models.generate_content(
-                model=model,
-                contents=contents
-            )
-            return response.text
-        else:
-            # Fall back to top-level generation function if available (non-streaming)
-            if hasattr(genai, 'get_model') or hasattr(genai, 'list_models'):
-                # The installed google.generativeai SDK doesn't provide the same Client API. Return a helpful message.
-                return 'Gemini generation is not supported with the installed google.generativeai SDK. Please install the Google GenAI SDK that provides genai.Client or adapt the code.'
-            else:
-                return 'Gemini API client not available in this environment.'
+        
+        # Use the correct API: GenerativeModel
+        gemini_model = genai.GenerativeModel(model)
+        response = gemini_model.generate_content(contents)
+        return response.text
     elif model_lower in Groq_MODELS:
         return call_groq_api(messages, model, api_key=api_key)
     else:
@@ -347,7 +303,8 @@ async def get_streaming_response(model, messages, image_urls=None, api_key: str 
     """Get streaming response based on model type with optional user API key"""
     model_lower = model.lower()
     
-    if model_lower in ["gemini-2.5-pro", "gemini-2.5-flash"]:
+    # Route Gemini models
+    if model_lower in ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"] or model_lower.startswith("gemini"):
         async for chunk in get_gemini_streaming_response(model, messages, image_urls, api_key=api_key):
             yield chunk
     elif model_lower in Groq_MODELS:
