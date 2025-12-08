@@ -202,29 +202,30 @@ def upload_file_to_gemini(file_url):
     filename = file_url.split("/")[-1]
     with open(filename, "wb") as f:
         f.write(response.content)
+    
     # Check file size
     print("Downloaded file size:", os.path.getsize(filename))
-    # Check PDF page count
-    try:
-        reader = PdfReader(filename)
-        print("PDF page count:", len(reader.pages))
-    except Exception as e:
-        print("PDF integrity check failed:", e)
-    # Upload to Gemini - support both client.files.upload (older SDKs) and genai.upload_file
+    
+    # Check PDF page count (skip for images)
+    if filename.lower().endswith('.pdf'):
+        try:
+            reader = PdfReader(filename)
+            print("PDF page count:", len(reader.pages))
+        except Exception as e:
+            print("PDF integrity check failed:", e)
+    
+    # Upload to Gemini using correct API
     file_obj = None
     try:
-        if client is not None and hasattr(client, 'files') and hasattr(client.files, 'upload'):
-            file_obj = client.files.upload(file=filename, config={'display_name': filename})
-        elif hasattr(genai, 'upload_file'):
-            # google.generativeai provides upload_file(file=...)
-            file_obj = genai.upload_file(file=filename, config={'display_name': filename})
-        else:
-            raise RuntimeError('No upload interface available in genai module')
+        # Use genai.upload_file with path as first argument (not file=)
+        file_obj = genai.upload_file(filename, display_name=filename)
+        print(f"Uploaded file to Gemini: {file_obj.name}")
     except Exception as e:
+        print(f"Error uploading {filename} to Gemini: {e}")
         os.remove(filename)
         raise
+    
     os.remove(filename)
-    print("Uploaded file to Gemini:", file_obj)
     return file_obj
 
 async def get_gemini_streaming_response(model: str, messages: list, image_urls=None, api_key: str = None) -> AsyncGenerator[str, None]:
